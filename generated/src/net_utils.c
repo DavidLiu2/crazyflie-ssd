@@ -1,4 +1,5 @@
 #include "net_utils.h"
+#include "printf.h"
 #include "pmsis.h"
 
 void print_perf(const char *name, const int cycles, const int macs) {
@@ -20,4 +21,3 @@ void checksum(const char *name, const uint8_t *d, size_t size, uint32_t sum_true
   else
     printf("Failed: true [%u] vs. calculated [%u]\n", sum_true, sum);
 }
-

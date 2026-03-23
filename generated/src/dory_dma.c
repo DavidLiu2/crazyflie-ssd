@@ -2,6 +2,14 @@
 
 #include "pmsis.h"
 
+#ifndef ARCHI_MCHAN_DEMUX_ADDR
+#define ARCHI_MCHAN_DEMUX_ADDR 0x00204400
+#endif
+
+#ifndef ARCHI_CL_EVT_DMA0
+#define ARCHI_CL_EVT_DMA0 8
+#endif
+
 #ifndef MCHAN_BASE_ADDR
 // FIXME: For GAP9, this must point to ARCHI_MCHAN_EXT_ADDR!!!
 // In PULP-SDK for Kraken, this is fixed.

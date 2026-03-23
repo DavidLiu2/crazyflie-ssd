@@ -6,11 +6,11 @@
 #include "camera_if.h"
 
 #include <stdint.h>
-#include <stdio.h>
 
 #include "bsp/camera/himax.h"
 
 #include "app_config.h"
+#include "app_log.h"
 
 int camera_if_init(struct pi_device *camera)
 {
@@ -21,7 +21,7 @@ int camera_if_init(struct pi_device *camera)
 
   pi_open_from_conf(camera, &cam_conf);
   if (pi_camera_open(camera)) {
-    printf("ERROR: camera_init failed\n");
+    app_log_error("camera init failed");
     return -1;
   }
 
@@ -34,15 +34,15 @@ int camera_if_init(struct pi_device *camera)
     pi_time_wait_us(1000000);
     pi_camera_reg_get(camera, APP_CAMERA_IMG_ORIENTATION_REG, &reg_value);
     if (set_value != reg_value) {
-      printf("WARN: camera orientation register mismatch (set=%u got=%u)\n",
-             set_value,
-             reg_value);
+      app_log_info(
+          "camera orientation register mismatch set=%u got=%u",
+          (unsigned int)set_value,
+          (unsigned int)reg_value);
     }
   }
   pi_camera_control(camera, PI_CAMERA_CMD_STOP, 0);
   pi_camera_control(camera, PI_CAMERA_CMD_AEG_INIT, 0);
 
-  printf("camera_init done\n");
   return 0;
 }
 
@@ -50,7 +50,7 @@ int camera_if_alloc_frame(camera_frame_t *frame)
 {
   frame->data = (uint8_t *)pi_l2_malloc(APP_CAMERA_FRAME_BYTES);
   if (frame->data == NULL) {
-    printf("ERROR: camera frame buffer allocation failed\n");
+    app_log_error("camera frame buffer allocation failed");
     return -1;
   }
 
@@ -58,10 +58,12 @@ int camera_if_alloc_frame(camera_frame_t *frame)
   frame->height = (uint16_t)APP_CAMERA_HEIGHT;
   frame->bytes = APP_CAMERA_FRAME_BYTES;
   frame->frame_id = 0;
+  frame->capture_us = 0;
 
-  printf("Camera frame buffer @ 0x%08x (%u bytes)\n",
-         (unsigned int)frame->data,
-         (unsigned int)frame->bytes);
+  app_log_debug(
+      "camera frame buffer @ 0x%08lx (%u bytes)",
+      (unsigned long)frame->data,
+      (unsigned int)frame->bytes);
   return 0;
 }
 

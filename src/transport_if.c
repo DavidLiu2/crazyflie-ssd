@@ -1,63 +1,86 @@
 /*
  * transport_if.c
- * Responsibility: UART-based compact packet transport for debug output.
+ * Responsibility: CPX console logging plus a separate CPX app-packet path.
  */
 
 #include "transport_if.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 
-#include "pmsis.h"
+#include "printf.h"
 
 #include "app_config.h"
-#include "mem_debug.h"
+#include "cpx.h"
 
 typedef struct __attribute__((packed)) {
   uint8_t magic;
-  uint8_t frame_id;
-  uint16_t checksum;
-  uint8_t output_head[APP_COMPACT_OUTPUT_BYTES];
-} compact_inference_packet_t;
+  uint8_t version;
+  uint16_t payload_len;
+  uint32_t frame_id;
+  int32_t x_raw;
+  int32_t scale_raw;
+  int32_t visibility_raw;
+} follow_packet_t;
 
-static struct pi_device g_uart;
+static bool g_console_ready = false;
+static CPXPacket_t g_follow_packet;
 
 int transport_if_init(void)
 {
-  struct pi_uart_conf conf;
-
-  pi_uart_conf_init(&conf);
-  conf.baudrate_bps = APP_UART_BAUDRATE_BPS;
-  conf.enable_tx = 1;
-  conf.enable_rx = 0;
-
-  pi_open_from_conf(&g_uart, &conf);
-  if (pi_uart_open(&g_uart)) {
-    printf("ERROR: uart_init failed\n");
-    return -1;
-  }
-
-  printf("uart_init done\n");
+  cpxInit();
+  cpxEnableFunction(CPX_F_APP);
+  cpxInitRoute(CPX_T_GAP8, CPX_T_STM32, CPX_F_APP, &g_follow_packet.route);
+  g_console_ready = true;
   return 0;
 }
 
-void transport_if_send_compact_packet(
-    uint32_t frame_id,
-    const uint8_t *net_out,
-    size_t net_out_size)
+bool transport_if_console_ready(void)
 {
-  compact_inference_packet_t pkt;
-  size_t copy_size =
-      (net_out_size < (size_t)APP_COMPACT_OUTPUT_BYTES)
-          ? net_out_size
-          : (size_t)APP_COMPACT_OUTPUT_BYTES;
+  return g_console_ready;
+}
 
-  memset(&pkt, 0, sizeof(pkt));
-  pkt.magic = (uint8_t)APP_PACKET_MAGIC;
-  pkt.frame_id = (uint8_t)(frame_id & 0xFFu);
-  memcpy(pkt.output_head, net_out, copy_size);
-  pkt.checksum = mem_debug_checksum16(pkt.output_head, APP_COMPACT_OUTPUT_BYTES);
+void transport_if_console_write(const char *message)
+{
+  if (message == NULL) {
+    return;
+  }
 
-  pi_uart_write(&g_uart, &pkt, sizeof(pkt));
+  if (g_console_ready) {
+    cpxPrintToConsole(LOG_TO_CRTP, "%s", message);
+  } else {
+    printf("%s", message);
+  }
+}
+
+int transport_if_send_follow_result(
+    uint32_t frame_id,
+    const follow_result_t *result)
+{
+#if APP_ENABLE_CPX_APP_PACKET_TX
+  follow_packet_t packet;
+
+  if (!g_console_ready || result == NULL) {
+    return -1;
+  }
+
+  packet.magic = (uint8_t)APP_PACKET_MAGIC;
+  packet.version = (uint8_t)APP_PACKET_VERSION;
+  packet.payload_len = (uint16_t)(sizeof(packet) - sizeof(packet.magic) - sizeof(packet.version) - sizeof(packet.payload_len));
+  packet.frame_id = frame_id;
+  packet.x_raw = result->x_raw;
+  packet.scale_raw = result->scale_raw;
+  packet.visibility_raw = result->visibility_raw;
+
+  memcpy(g_follow_packet.data, &packet, sizeof(packet));
+  g_follow_packet.dataLength = (uint16_t)sizeof(packet);
+  cpxSendPacketBlocking(&g_follow_packet);
+  return 0;
+#else
+  (void)frame_id;
+  (void)result;
+  return -1;
+#endif
 }

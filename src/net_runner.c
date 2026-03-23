@@ -7,11 +7,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #include "pmsis.h"
 
 #include "app_config.h"
+#include "app_log.h"
 #include "mem.h"
 #include "network.h"
 
@@ -60,20 +60,21 @@ static int allocate_arena_with_candidates(void)
   for (i = 0; i < (sizeof(k_arena_candidates) / sizeof(k_arena_candidates[0])); i++) {
     const size_t candidate = k_arena_candidates[i];
     g_l2_arena = (uint8_t *)pi_l2_malloc(candidate);
-    printf("Arena candidate %u bytes: %s\n",
-           (unsigned int)candidate,
-           g_l2_arena ? "OK" : "FAILED");
+    app_log_debug(
+        "arena candidate %u bytes: %s",
+        (unsigned int)candidate,
+        g_l2_arena ? "OK" : "FAILED");
     if (g_l2_arena != NULL) {
       g_l2_arena_bytes = candidate;
-      printf("Selected arena candidate: %u bytes\n", (unsigned int)g_l2_arena_bytes);
-      printf("L2 arena @ 0x%08x (%u bytes)\n",
-             (unsigned int)g_l2_arena,
-             (unsigned int)g_l2_arena_bytes);
+      app_log_debug(
+          "selected L2 arena @ 0x%08lx (%u bytes)",
+          (unsigned long)g_l2_arena,
+          (unsigned int)g_l2_arena_bytes);
       return 0;
     }
   }
 
-  printf("ERROR: L2 arena allocation failed for all candidates\n");
+  app_log_error("L2 arena allocation failed for all candidates");
   return -1;
 }
 
@@ -81,7 +82,7 @@ static int allocate_output_buffer(void)
 {
   g_net_out = (uint8_t *)pi_l2_malloc(APP_NET_OUTPUT_BYTES);
   if (g_net_out == NULL) {
-    printf("ERROR: net output allocation failed\n");
+    app_log_error("network output allocation failed");
     if (g_l2_arena != NULL) {
       pi_l2_free(g_l2_arena, g_l2_arena_bytes);
       g_l2_arena = NULL;
@@ -89,9 +90,10 @@ static int allocate_output_buffer(void)
     }
     return -1;
   }
-  printf("Net output @ 0x%08x (%u bytes)\n",
-         (unsigned int)g_net_out,
-         (unsigned int)APP_NET_OUTPUT_BYTES);
+  app_log_debug(
+      "net output @ 0x%08lx (%u bytes)",
+      (unsigned long)g_net_out,
+      (unsigned int)APP_NET_OUTPUT_BYTES);
 
   return 0;
 }
@@ -106,29 +108,18 @@ static int allocate_runtime_buffers(void)
 
 int net_runner_init(void)
 {
-  const size_t generated_output_bytes = network_generated_output_bytes();
-  const size_t generated_peak_l2_usage = network_generated_peak_l2_usage_bytes();
-  const size_t generated_required_arena = network_generated_required_l2_arena_bytes();
+  app_log_debug(
+      "net init arena order=%s requested_arena=%u output_bytes=%u",
+      APP_ALLOCATE_ARENA_BEFORE_NETWORK_INIT ?
+          "before_network_init" :
+          "after_network_init",
+      (unsigned int)APP_NET_ARENA_BYTES,
+      (unsigned int)APP_NET_OUTPUT_BYTES);
 
-  printf("Arena allocation order: %s\n",
-         APP_ALLOCATE_ARENA_BEFORE_NETWORK_INIT ?
-         "before network_initialize()" :
-         "after network_initialize()");
-  printf("Requested arena/output: APP_NET_ARENA_BYTES=%u APP_NET_OUTPUT_BYTES=%u\n",
-         (unsigned int)APP_NET_ARENA_BYTES,
-         (unsigned int)APP_NET_OUTPUT_BYTES);
-  printf("Generated output bytes (activations_out_size[70]): %u\n",
-         (unsigned int)generated_output_bytes);
-  printf("Generated L2 peak usage (from network_run_cluster schedule): %u\n",
-         (unsigned int)generated_peak_l2_usage);
-  printf("Generated required L2 arena (strict '<' in directional allocator): %u\n",
-         (unsigned int)generated_required_arena);
-
-  printf("BEFORE mem_init\n");
   mem_init();
-  printf("AFTER mem_init\n");
-  printf("Max contiguous L2 block after mem_init: %u bytes\n",
-         (unsigned int)probe_max_l2_block());
+  app_log_debug(
+      "max contiguous L2 block after mem_init=%u bytes",
+      (unsigned int)probe_max_l2_block());
 
   if (APP_ALLOCATE_ARENA_BEFORE_NETWORK_INIT) {
     if (allocate_runtime_buffers()) {
@@ -136,27 +127,15 @@ int net_runner_init(void)
     }
   }
 
-  printf("BEFORE network_init\n");
   network_initialize();
-  printf("AFTER network_init\n");
-  printf("Max contiguous L2 block after network_initialize: %u bytes\n",
-         (unsigned int)probe_max_l2_block());
+  app_log_debug(
+      "max contiguous L2 block after network_initialize=%u bytes",
+      (unsigned int)probe_max_l2_block());
 
   if (!APP_ALLOCATE_ARENA_BEFORE_NETWORK_INIT) {
     if (allocate_runtime_buffers()) {
       return -1;
     }
-  }
-
-  if (g_l2_arena_bytes < generated_required_arena) {
-    printf("WARNING: selected arena (%u) < generated required (%u)\n",
-           (unsigned int)g_l2_arena_bytes,
-           (unsigned int)generated_required_arena);
-  }
-  if ((size_t)APP_NET_OUTPUT_BYTES != generated_output_bytes) {
-    printf("WARNING: APP_NET_OUTPUT_BYTES (%u) != generated output (%u)\n",
-           (unsigned int)APP_NET_OUTPUT_BYTES,
-           (unsigned int)generated_output_bytes);
   }
 
   return 0;
@@ -180,12 +159,10 @@ size_t net_runner_get_output_size(void)
 int net_runner_run(void)
 {
   if (g_l2_arena == NULL || g_net_out == NULL) {
+    app_log_error("network buffers are not initialized");
     return -1;
   }
 
-  printf("network run start\n");
   network_run(g_l2_arena, g_l2_arena_bytes, g_net_out, 0, 1);
-  printf("network run done\n");
-
   return 0;
 }

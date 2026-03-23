@@ -1,5 +1,6 @@
 #include "mem.h"
 #include "pmsis.h"
+#include "printf.h"
 #include "bsp/bsp.h"
 #include "bsp/fs.h"
 #include "bsp/fs/readfs.h"

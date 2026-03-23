@@ -16,6 +16,10 @@
 
 #include "pmsis.h"
 
+#ifndef eu_evt_maskWaitAndClr
+#define eu_evt_maskWaitAndClr(evt_mask) hal_eu_evt_mask_wait_and_clr(evt_mask)
+#endif
+
 #define MCHAN_CMD_OFFSET 0
 #define MCHAN_STATUS_OFFSET 4
 

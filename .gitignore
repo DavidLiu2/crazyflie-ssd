@@ -1,0 +1,4 @@
+docker_gvsoc_logs_*/
+*.log
+BUILD/
+hex/

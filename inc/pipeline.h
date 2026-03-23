@@ -8,6 +8,8 @@
 
 #include "app_types.h"
 
-void pipeline_process_frame(const camera_frame_t *frame);
+int pipeline_process_frame(
+    const camera_frame_t *frame,
+    pipeline_result_t *result);
 
 #endif /* PIPELINE_H */
